@@ -135,10 +135,18 @@ export default async function handler(req, res) {
 
     // Forward status code and headers from the target API
     res.status(apiResponse.status);
+    // apiResponse.headers.forEach((value, name) => {
+    //   res.setHeader(name, value);
+    // });
+    // ## THE FIX IS HERE ##
+    // Forward headers, but remove content-encoding and content-length 
+    // as we are decompressing the body before sending it.
     apiResponse.headers.forEach((value, name) => {
-      res.setHeader(name, value);
+      const lowerCaseName = name.toLowerCase();
+      if (lowerCaseName !== 'content-encoding' && lowerCaseName !== 'content-length') {
+        res.setHeader(name, value);
+      }
     });
-    
     // Make sure our CORS headers are not overwritten
     res.setHeader('Access-Control-Allow-Origin', '*');
 

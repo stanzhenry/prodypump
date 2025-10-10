@@ -159,6 +159,120 @@
 //   }
 // }
 
+// // A helper function to parse the body from the raw request stream
+// async function parseBody(req) {
+//   return new Promise((resolve, reject) => {
+//     let body = "";
+//     req.on("data", (chunk) => {
+//       body += chunk.toString();
+//     });
+//     req.on("end", () => {
+//       if (body) {
+//         try {
+//           // Attempt to parse the body as JSON
+//           resolve(JSON.parse(body));
+//         } catch (error) {
+//           // If parsing fails, it might not be JSON; reject the error
+//           reject(error);
+//         }
+//       } else {
+//         // Resolve with null if there is no body
+//         resolve(null);
+//       }
+//     });
+//     req.on("error", (err) => {
+//       reject(err);
+//     });
+//   });
+// }
+
+// export default async function handler(req, res) {
+//   // ## CORS HEADERS ##
+//   // Set headers to allow cross-origin requests
+//   res.setHeader('Access-Control-Allow-Origin', '*'); // Or your specific frontend domain
+//   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+//   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+//   // ## PREFLIGHT REQUEST (OPTIONS) HANDLING ##
+//   // Browsers send an OPTIONS request first to check CORS permissions
+//   if (req.method === 'OPTIONS') {
+//     res.status(204).end();
+//     return;
+//   }
+
+//   // Destructure the request query to separate the path from other parameters
+//   const { slug = [], path, ...queryParams } = req.query;
+//   const targetPath = path || slug.join("/");
+
+//   // ## FIX FOR MULTIPLE QUERY PARAMETERS ##
+//   // Manually build the query string to correctly handle arrays.
+//   // This ensures that `?status=A&status=B` is preserved instead of becoming `?status=A,B`.
+//   const params = new URLSearchParams();
+//   for (const [key, value] of Object.entries(queryParams)) {
+//     if (Array.isArray(value)) {
+//       // If the value is an array, append each item separately for the same key
+//       value.forEach(item => params.append(key, item));
+//     } else {
+//       // Otherwise, just set the single value
+//       params.set(key, value);
+//     }
+//   }
+//   const queryString = params.toString();
+
+//   // Construct the full target URL to forward the request to
+//   const targetUrl = `https://solpump.io/api/${targetPath}${
+//     queryString ? `?${queryString}` : ""
+//   }`;
+
+//   console.log(`Forwarding request to: ${targetUrl}`);
+
+//   try {
+//     // Attempt to parse the incoming request body
+//     const requestBody = await parseBody(req).catch(() => null);
+
+//     // Prepare the options for the fetch request to the target API
+//     const options = {
+//       method: req.method,
+//       headers: {
+//         // Forward the original Content-Type and Authorization headers
+//         "Content-Type": req.headers["content-type"] || "application/json",
+//         Authorization: req.headers.authorization || "",
+//       },
+//       // This is required by Vercel's fetch implementation for requests with bodies
+//       duplex: 'half'
+//     };
+
+//     // If there was a body in the original request, stringify and add it
+//     if (requestBody) {
+//       options.body = JSON.stringify(requestBody);
+//     }
+
+//     // Make the request to the target API
+//     const apiResponse = await fetch(targetUrl, options);
+
+//     // ## FORWARD RESPONSE ##
+//     // Set the status code from the target API's response
+//     res.status(apiResponse.status);
+
+//     // Forward headers from the target API, but remove headers that can cause issues
+//     apiResponse.headers.forEach((value, name) => {
+//       const lowerCaseName = name.toLowerCase();
+//       if (lowerCaseName !== 'content-encoding' && lowerCaseName !== 'content-length') {
+//         res.setHeader(name, value);
+//       }
+//     });
+//     // Ensure our CORS header is not overwritten by the target API's headers
+//     res.setHeader('Access-Control-Allow-Origin', '*');
+
+//     // Get the response body as text and send it back to the client
+//     const body = await apiResponse.text();
+//     res.send(body);
+
+//   } catch (error) {
+//     console.error("Proxy error:", error);
+//     res.status(500).json({ error: "An error occurred in the proxy route.", message: error.message });
+//   }
+// }
 // A helper function to parse the body from the raw request stream
 async function parseBody(req) {
   return new Promise((resolve, reject) => {
@@ -234,9 +348,17 @@ export default async function handler(req, res) {
     const options = {
       method: req.method,
       headers: {
+        // Set Host and Origin to solpump.com as required by the API
+        "Host": "solpump.com",
+        "Origin": "https://solpump.com",
         // Forward the original Content-Type and Authorization headers
         "Content-Type": req.headers["content-type"] || "application/json",
-        Authorization: req.headers.authorization || "",
+        "Authorization": req.headers.authorization || "",
+        // Forward other relevant headers
+        "User-Agent": req.headers["user-agent"] || "",
+        "Accept": req.headers["accept"] || "*/*",
+        "Accept-Language": req.headers["accept-language"] || "",
+        "Accept-Encoding": req.headers["accept-encoding"] || "",
       },
       // This is required by Vercel's fetch implementation for requests with bodies
       duplex: 'half'
@@ -257,7 +379,8 @@ export default async function handler(req, res) {
     // Forward headers from the target API, but remove headers that can cause issues
     apiResponse.headers.forEach((value, name) => {
       const lowerCaseName = name.toLowerCase();
-      if (lowerCaseName !== 'content-encoding' && lowerCaseName !== 'content-length') {
+      // Skip problematic headers and the original Host/Origin headers
+      if (!['content-encoding', 'content-length', 'host', 'origin'].includes(lowerCaseName)) {
         res.setHeader(name, value);
       }
     });

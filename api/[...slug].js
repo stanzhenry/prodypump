@@ -220,7 +220,7 @@ export default async function handler(req, res) {
   const queryString = params.toString();
 
   // Construct the full target URL to forward the request to
-  const targetUrl = `https://solpump.com/api/${targetPath}${
+  const targetUrl = `https://solpump.io/api/${targetPath}${
     queryString ? `?${queryString}` : ""
   }`;
 
